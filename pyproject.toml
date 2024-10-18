@@ -26,6 +26,10 @@ dependencies=[
     "pandas>=1.2.4",
     "numpy<1.25.0;python_version<='3.8'",
     "milvus-lite>=2.4.0;sys_platform!='win32'",
+    "requests",
+    "minio>=7.0.0",
+    "pyarrow>=12.0.0",
+    "azure-storage-blob",
 ]
 
 classifiers=[
@@ -44,12 +48,8 @@ dynamic = ["version"]
 "repository" = 'https://github.com/milvus-io/pymilvus'
 
 [project.optional-dependencies]
-bulk_writer = [
-    "requests",
-    "minio>=7.0.0",
-    "pyarrow>=12.0.0",
-    "azure-storage-blob",
-]
+# bulk_writer = [
+# ]
 
 model = [
     "milvus-model>=0.1.0",
