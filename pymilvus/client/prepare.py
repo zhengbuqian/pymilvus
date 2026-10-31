@@ -1547,7 +1547,7 @@ class Prepare:
         if not field_ops:
             return
         for field_name, op in field_ops.items():
-            request.field_ops.add(field_name=field_name, op=op.op)
+            request.field_ops.add(field_name=field_name, op=op.op, path=op.path)
 
     @classmethod
     def delete_request(

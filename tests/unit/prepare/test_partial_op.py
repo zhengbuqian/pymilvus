@@ -16,6 +16,34 @@ def test_fieldop_factories_return_expected_enum_values():
     assert FieldOp.array_append().op == FieldOpType.ARRAY_APPEND
     assert FieldOp.array_remove().op == FieldOpType.ARRAY_REMOVE
     assert FieldOp.replace().op == FieldOpType.REPLACE
+    op = FieldOp.path_replace("[1][age]")
+    assert op.op == FieldOpType.PATH_REPLACE
+    assert op.path == "[1][age]"
+
+
+@pytest.mark.parametrize("path", ["", None, 1])
+def test_fieldop_path_replace_rejects_missing_path(path):
+    with pytest.raises(ParamError, match="non-empty path"):
+        FieldOp.path_replace(path)
+
+
+def test_normalize_field_ops_keeps_path_replace_path():
+    ops = normalize_field_ops({"profile": FieldOp.path_replace("[0]")})
+    assert ops["profile"].op == FieldOpType.PATH_REPLACE
+    assert ops["profile"].path == "[0]"
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        FieldOpType.PATH_REPLACE,
+        int(FieldOpType.PATH_REPLACE),
+        schema_pb2.FieldPartialUpdateOp(op=FieldOpType.PATH_REPLACE),
+    ],
+)
+def test_normalize_field_ops_rejects_path_replace_without_path(op):
+    with pytest.raises(ParamError, match="requires a path"):
+        normalize_field_ops({"profile": op})
 
 
 def test_normalize_field_ops_accepts_proto_message():
@@ -187,6 +215,20 @@ def test_batch_upsert_param_emits_field_op(array_schema):
     assert op.op == FieldOpType.ARRAY_APPEND
 
 
+def test_batch_upsert_param_emits_path_replace_path(array_schema):
+    req = Prepare.batch_upsert_param(
+        "test",
+        _batch_entities(),
+        "",
+        _fields_info(array_schema),
+        field_ops={"tags": FieldOp.path_replace("[0]")},
+    )
+    op = _find_field_op(req, "tags")
+    assert op is not None
+    assert op.op == FieldOpType.PATH_REPLACE
+    assert op.path == "[0]"
+
+
 def test_batch_upsert_param_without_ops_default(array_schema):
     req = Prepare.batch_upsert_param("test", _batch_entities(), "", _fields_info(array_schema))
     assert req.partial_update is False
@@ -208,6 +250,15 @@ def test_apply_field_ops_appends_each_to_request():
     assert len(req.field_ops) == 2
     byname = {o.field_name: o.op for o in req.field_ops}
     assert byname == {"a": FieldOpType.ARRAY_APPEND, "b": FieldOpType.ARRAY_REMOVE}
+
+
+def test_apply_field_ops_forwards_path():
+    req = milvus_pb2.UpsertRequest()
+    Prepare._apply_field_ops(req, {"scores": FieldOp.path_replace("[2]")})
+    assert len(req.field_ops) == 1
+    assert req.field_ops[0].field_name == "scores"
+    assert req.field_ops[0].op == FieldOpType.PATH_REPLACE
+    assert req.field_ops[0].path == "[2]"
 
 
 def test_apply_field_ops_empty_is_noop():

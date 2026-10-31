@@ -17,9 +17,9 @@
 """Field-level partial-update helpers.
 
 These helpers wrap :class:`schema_pb2.FieldPartialUpdateOp` so callers do not
-need to import the generated protobuf module directly. ``FieldOp.array_append``
-and ``FieldOp.array_remove`` return ready-to-use proto messages that can be
-attached to a field during ``MilvusClient.upsert``.
+need to import the generated protobuf module directly. ``FieldOp.array_append``,
+``FieldOp.array_remove`` and ``FieldOp.path_replace`` return ready-to-use proto
+messages that can be attached to a field during ``MilvusClient.upsert``.
 """
 
 from typing import Mapping, Optional, Union
@@ -68,6 +68,18 @@ class FieldOp:
         """Return an ARRAY_REMOVE op, deleting every matching element."""
         return schema_pb2.FieldPartialUpdateOp(op=FieldOpType.ARRAY_REMOVE)
 
+    @staticmethod
+    def path_replace(path: str) -> schema_pb2.FieldPartialUpdateOp:
+        """Return a PATH_REPLACE op that replaces only the value at ``path``.
+
+        ``path`` is relative to the field: ``"[1]"`` selects one Array or
+        Array-of-Struct element, ``"[1][age]"`` one child of a struct element,
+        and JSON fields use segments such as ``'["profile"][1]["age"]'``.
+        """
+        if not isinstance(path, str) or not path:
+            raise ParamError(message="path_replace requires a non-empty path string")
+        return schema_pb2.FieldPartialUpdateOp(op=FieldOpType.PATH_REPLACE, path=path)
+
 
 # Map from string alias to the concrete enum value. Kept out of the class so
 # callers can extend it in the future without touching ``FieldOp``.
@@ -99,6 +111,11 @@ def normalize_field_ops(
         resolved = _coerce_single(field_name, op)
         if resolved is None or resolved.op == FieldOpType.REPLACE:
             continue
+        if resolved.op == FieldOpType.PATH_REPLACE and not resolved.path:
+            raise ParamError(
+                message=f"PATH_REPLACE for field {field_name!r} requires a path, "
+                "use FieldOp.path_replace(path)"
+            )
         normalized[field_name] = resolved
     return normalized
 
